@@ -73,18 +73,6 @@ to estimate confidence level of logging activity.
 
 ---
 
-# Hardware Components
-
-| Component | Purpose |
-|---|---|
-| ESP32 | Main microcontroller |
-| MPU6050 | Detects acceleration and impacts |
-| INMP441 | Captures acoustic energy |
-| SW-420 | Wake-on-vibration trigger |
-| LoRa Module | Long-range communication |
-| GPS Module (Optional) | Forest node location |
-| Battery Pack | Remote deployment power |
----
 
 # Detection logic
 <img width="450" height="500" alt="bonbibi_logic_flowchart" src="https://github.com/user-attachments/assets/f0e91cc5-1943-496a-a753-310cf788cf93" />
