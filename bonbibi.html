@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>BONBIBI Mission Control</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+body{margin:0;font-family:Barlow;background:#0a0f0a;color:#d4e8d0}
+
+header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 18px;background:#111a11;border-bottom:1px solid #1e2e1e;
+}
+
+.title{color:#22c55e;font-family:Barlow Condensed;font-size:22px}
+
+button{
+  padding:10px 14px;border:1px solid #22c55e;
+  background:transparent;color:#22c55e;cursor:pointer;
+  font-family:monospace;
+}
+
+button.connected{border-color:#ef4444;color:#ef4444}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr 1.3fr;
+  min-height:calc(100vh - 60px);
+  background:#1e2e1e;
+  gap:2px;
+}
+
+.panel{background:#111a11;padding:16px}
+
+.status{
+  font-family:monospace;font-size:13px;
+  display:grid;gap:10px;
+}
+
+.row{display:flex;justify-content:space-between;color:#7a9e78}
+.value{color:#d4e8d0}
+
+.alert{
+  margin-top:14px;
+  padding:10px;
+  text-align:center;
+  font-family:monospace;
+  border:1px solid #1e2e1e;
+}
+
+.ok{color:#22c55e}
+.warn{color:#f59e0b}
+.high{color:#ef4444;animation:pulse .8s infinite}
+
+@keyframes pulse{50%{opacity:.4}}
+
+#map{height:460px}
+
+.log{
+  height:460px;
+  overflow:auto;
+  font-family:monospace;
+  font-size:12px;
+  background:#060d06;
+  padding:10px;
+  color:#7a9e78;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="title">BONBIBI Mission Control</div>
+  <button id="btn" onclick="connectSerial()">CONNECT</button>
+</header>
+
+<div class="grid">
+
+  <!-- STATUS -->
+  <div class="panel">
+    <div class="status">
+      <div class="row"><span>species</span><span class="value" id="species">unknown</span></div>
+      <div class="row"><span>cluster</span><span class="value" id="cluster">unknown</span></div>
+      <div class="row"><span>rms</span><span class="value" id="rms">0</span></div>
+    </div>
+
+    <div class="alert ok" id="alert">SYSTEM READY</div>
+  </div>
+
+  <!-- MAP -->
+  <div class="panel">
+    <div id="map"></div>
+  </div>
+
+  <!-- LOG -->
+  <div class="panel">
+    <div class="log" id="log"></div>
+  </div>
+
+</div>
+
+<script>
+
+// MAP
+const map=L.map('map').setView([21.9381,89.1815],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let marker=L.marker([21.9381,89.1815]).addTo(map);
+
+// STATE
+let alertReset=null;
+
+// DEFAULT ALWAYS UNKNOWN UNTIL HIGH ALERT
+function resetIdentity(){
+  document.getElementById("species").textContent="unknown";
+  document.getElementById("cluster").textContent="unknown";
+}
+
+// SERIAL CONNECT
+async function connectSerial(){
+  try{
+    const port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+
+    document.getElementById("btn").classList.add("connected");
+    document.getElementById("btn").textContent="DISCONNECT";
+
+    resetIdentity(); // IMPORTANT
+
+    read(port);
+  }
+  catch(e){
+    alert(e);
+  }
+}
+
+// SERIAL READ
+async function read(port){
+  const reader=port.readable.getReader();
+  const decoder=new TextDecoder();
+  let buf="";
+
+  while(true){
+    const {value,done}=await reader.read();
+    if(done) break;
+
+    buf+=decoder.decode(value);
+    let lines=buf.split("\n");
+    buf=lines.pop();
+
+    for(let l of lines) handle(l.trim());
+  }
+}
+
+// HANDLE DATA
+function handle(line){
+  log(line);
+
+  let rms=line.match(/RMS.*?(\d+)/);
+  if(rms) document.getElementById("rms").textContent=rms[1];
+
+  // GPS
+  let gps=line.match(/LAT=([\d.]+).*LON=([\d.]+)/);
+  if(gps){
+    marker.setLatLng([+gps[1],+gps[2]]);
+    map.setView([+gps[1],+gps[2]]);
+  }
+
+  // HIGH CONFIDENCE EVENT
+  if(line.includes("CONF=HIGH")){
+    setAlert("high");
+
+    // ONLY HERE species becomes active
+    document.getElementById("species").textContent="Sundari";
+    document.getElementById("cluster").textContent="7";
+
+    if(alertReset) clearTimeout(alertReset);
+
+    alertReset=setTimeout(()=>{
+      setAlert("ok");
+      resetIdentity(); // RESET AFTER 6 sec
+    },6000);
+  }
+
+  if(line.includes("CONF=MED")){
+    setAlert("warn");
+  }
+}
+
+// ALERT UI
+function setAlert(t){
+  let a=document.getElementById("alert");
+
+  if(t==="high"){
+    a.className="alert high";
+    a.textContent="HIGH CONFIDENCE ALERT";
+  }
+  else if(t==="warn"){
+    a.className="alert warn";
+    a.textContent="WARNING DETECTED";
+  }
+  else{
+    a.className="alert ok";
+    a.textContent="SYSTEM NORMAL";
+  }
+}
+
+// LOG
+function log(t){
+  let d=document.getElementById("log");
+  d.innerHTML+=t+"<br>";
+  d.scrollTop=d.scrollHeight;
+}
+
+</script>
+
+</body>
+</html>
