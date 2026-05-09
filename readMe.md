@@ -223,8 +223,9 @@ to estimate confidence level of logging activity.
 
 
 ---
-# Co<img width="96" height="150" alt="bonbibi_logic_flowchart" src="https://github.com/user-attachments/assets/f0e91cc5-1943-496a-a753-310cf788cf93" />
-mmunication
+<img width="96" height="150" alt="bonbibi_logic_flowchart" src="https://github.com/user-attachments/assets/f0e91cc5-1943-496a-a753-310cf788cf93" />
+
+# Communication
 
 The system uses LoRa for:
 - long-range operation
